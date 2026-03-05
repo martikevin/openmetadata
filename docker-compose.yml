@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  # ── The standard OpenMetadata stack (pin to any version you like) ──────
+  # Uncomment and configure when connecting to a real OM instance.
+  # openmetadata:
+  #   image: openmetadata/server:1.4.0
+  #   ports:
+  #     - "8585:8585"
+  #   environment:
+  #     ...
+
+  # ── Request-Access Backend (FastAPI) ──────────────────────────────────
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      OPENMETADATA_URL: ${OPENMETADATA_URL:-http://host.docker.internal:8585/api}
+      OPENMETADATA_TOKEN: ${OPENMETADATA_TOKEN:-}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./request_access.db}
+    volumes:
+      - backend-data:/app
+    restart: unless-stopped
+
+  # ── Request-Access Frontend (React / Nginx) ───────────────────────────
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:
