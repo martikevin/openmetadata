@@ -1,53 +1,58 @@
-# OpenMetadata Request Access Workflow
+# OpenMetadata – Request Access Workflow (Fork)
 
-A **standalone sidecar service** that adds a data access request workflow to
-[OpenMetadata](https://open-metadata.org/).
-It talks to OpenMetadata exclusively through the public REST API, so upgrading
-OpenMetadata to a newer version requires **zero code changes** here – just point
-the `OPENMETADATA_URL` env-var at the new instance.
+A **minimal fork** of [OpenMetadata](https://open-metadata.org/) that adds a
+data-access request workflow.  Only **23 lines changed** in 5 existing OM files,
+so pulling upstream updates is a trivial rebase.
 
-## Architecture
+## What changed in the OM codebase?
+
+| File | Change | Lines |
+|------|--------|-------|
+| `constants.ts` | +1 route (`REQUEST_ACCESS`) | +3 |
+| `sidebar.enum.ts` | +1 enum value | +1 |
+| `LeftSidebar.constants.ts` | +1 nav item | +8 |
+| `en-us.json` | +1 i18n label | +1 |
+| `AuthenticatedAppRouter.tsx` | +1 lazy import + route | +10 |
+| **Total** | | **+23** |
+
+Everything else lives in **new, isolated files/directories** that will never
+conflict with upstream:
 
 ```
-┌─────────────┐       REST        ┌──────────────────┐
-│  OM Server   │◄────────────────►│  Request-Access   │
-│  (any ver.)  │   /api/v1/...    │  Backend (FastAPI)│
-└─────────────┘                   └────────┬─────────┘
-                                           │ SQLAlchemy
-                                     ┌─────▼─────┐
-                                     │ PostgreSQL │
-                                     │  / SQLite  │
-                                     └───────────┘
-┌─────────────────────────────────────────────────────┐
-│           React Frontend  (Vite + Ant Design)       │
-│  • Browse assets / data products                     │
-│  • Request access (role, purpose, free-text)         │
-│  • Owner approval / rejection dashboard              │
-└─────────────────────────────────────────────────────┘
+request-access-backend/     ← FastAPI sidecar (own DB, own API)
+request-access-frontend/    ← Standalone React app (alternative UI)
+openmetadata-ui/…/pages/RequestAccessPage/  ← OM-integrated page
+docker-compose.request-access.yml
 ```
 
-## Quick Start
+## Merging upstream updates
 
 ```bash
-docker compose up --build
+git remote add upstream https://github.com/open-metadata/OpenMetadata.git
+git fetch upstream main
+git rebase upstream/main
+# Resolve the ~5 trivial conflicts (if any) in the files above
+```
+
+## Sidecar Backend
+
+The workflow data (requests, approvals) lives in a separate FastAPI service
+that talks to OM via REST API.  Start it with:
+
+```bash
+docker compose -f docker-compose.request-access.yml up --build
 ```
 
 | Service            | URL                        |
 |--------------------|----------------------------|
-| Frontend           | http://localhost:3000       |
 | Backend API        | http://localhost:8000       |
 | API Docs (Swagger) | http://localhost:8000/docs  |
 
-## Configuration (env vars)
+## Workflow
 
-| Variable              | Default                         | Description                     |
-|-----------------------|---------------------------------|---------------------------------|
-| `OPENMETADATA_URL`    | `http://localhost:8585/api`     | Base URL of OpenMetadata API    |
-| `OPENMETADATA_TOKEN`  | *(empty)*                       | JWT / bot token for OM API      |
-| `DATABASE_URL`        | `sqlite:///./request_access.db` | SQLAlchemy connection string    |
-
-## Why a sidecar?
-
-Patching OpenMetadata's Java backend means every upstream release requires a
-painful merge.  This service sits **beside** OM, never inside it.  When a new
-OM version ships, update `docker-compose.yml` and you're done.
+1. User clicks **Request Access** in the OM sidebar
+2. Selects assets (tables, dashboards, topics…) or bundles
+3. Chooses a **role** (Viewer / Editor / Admin)
+4. Picks a **purpose** from predefined list or writes free text
+5. Owner is auto-resolved from OM metadata
+6. Owner **approves / rejects** with optional comment
