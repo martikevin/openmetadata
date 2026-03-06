@@ -12,7 +12,7 @@ services:
 
   # ── Request-Access Backend (FastAPI) ──────────────────────────────────
   backend:
-    build: ./backend
+    build: ./request-access-backend
     ports:
       - "8000:8000"
     environment:
@@ -25,7 +25,7 @@ services:
 
   # ── Request-Access Frontend (React / Nginx) ───────────────────────────
   frontend:
-    build: ./frontend
+    build: ./request-access-frontend
     ports:
       - "3000:3000"
     depends_on:
