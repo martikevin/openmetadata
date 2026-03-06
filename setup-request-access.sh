@@ -3,11 +3,12 @@
 # Request Access Workflow – Setup & Start Script
 # ============================================================================
 # Usage:
-#   ./setup-request-access.sh            # Start backend + frontend (dev mode)
+#   ./setup-request-access.sh            # Install, seed, start backend + frontend
 #   ./setup-request-access.sh backend    # Start only the backend
 #   ./setup-request-access.sh frontend   # Start only the frontend
 #   ./setup-request-access.sh docker     # Start everything via Docker Compose
 #   ./setup-request-access.sh install    # Only install dependencies (no start)
+#   ./setup-request-access.sh seed       # Only seed demo data (no start)
 # ============================================================================
 
 set -euo pipefail
@@ -94,9 +95,20 @@ install_frontend() {
     cd "$ROOT_DIR"
 }
 
+# ── Seed demo data ─────────────────────────────────────────────────────────
+seed_data() {
+    info "Seeding demo data..."
+    cd "$BACKEND_DIR"
+    source .venv/bin/activate
+    $PYTHON seed_demo_data.py
+    ok "Demo data ready."
+    cd "$ROOT_DIR"
+}
+
 # ── Start backend ──────────────────────────────────────────────────────────
 start_backend() {
     install_backend
+    seed_data
     info "Starting backend on http://localhost:8000 ..."
     info "  API docs:  http://localhost:8000/docs"
     info "  Health:    http://localhost:8000/health"
@@ -109,7 +121,7 @@ start_backend() {
 # ── Start frontend ─────────────────────────────────────────────────────────
 start_frontend() {
     install_frontend
-    info "Starting frontend on http://localhost:5173 ..."
+    info "Starting frontend on http://localhost:3000 ..."
     echo ""
     cd "$FRONTEND_DIR"
     npx vite --host 0.0.0.0
@@ -119,6 +131,7 @@ start_frontend() {
 start_both() {
     install_backend
     install_frontend
+    seed_data
 
     echo ""
     info "========================================="
@@ -126,7 +139,8 @@ start_both() {
     info "========================================="
     info "  Backend:   http://localhost:8000"
     info "  API docs:  http://localhost:8000/docs"
-    info "  Frontend:  http://localhost:5173"
+    info "  Frontend:  http://localhost:3000"
+    echo ""
     info "  Press Ctrl+C to stop both."
     echo ""
 
@@ -136,7 +150,17 @@ start_both() {
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
     BACKEND_PID=$!
 
-    # Start frontend in foreground
+    # Wait for backend to be ready
+    info "Waiting for backend..."
+    for i in $(seq 1 10); do
+        if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+            ok "Backend is up!"
+            break
+        fi
+        sleep 1
+    done
+
+    # Start frontend
     cd "$FRONTEND_DIR"
     npx vite --host 0.0.0.0 &
     FRONTEND_PID=$!
@@ -182,6 +206,11 @@ case "$MODE" in
         install_frontend
         ok "All dependencies installed. Run ./setup-request-access.sh to start."
         ;;
+    seed)
+        check_python
+        install_backend
+        seed_data
+        ;;
     both|"")
         check_python
         check_node
@@ -189,7 +218,7 @@ case "$MODE" in
         ;;
     *)
         err "Unknown mode: $MODE"
-        echo "Usage: $0 [backend|frontend|docker|install|both]"
+        echo "Usage: $0 [backend|frontend|docker|install|seed|both]"
         exit 1
         ;;
 esac
